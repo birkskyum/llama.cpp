@@ -6797,6 +6797,30 @@ static void ggml_opencl_print_backend_info(ggml_backend_opencl_device_context * 
     }
 }
 
+// OpenCL 3.0 devices may report subgroups as the optional __opencl_c_subgroups
+// feature instead of the cl_khr_subgroups extension.
+static bool ggml_opencl_has_c_feature(cl_device_id device, const char * name) {
+#if CL_TARGET_OPENCL_VERSION >= 300
+    size_t param_size = 0;
+    if (clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES, 0, nullptr, &param_size) != CL_SUCCESS || !param_size) {
+        return false;
+    }
+    std::vector<cl_name_version> features(param_size / sizeof(cl_name_version));
+    if (clGetDeviceInfo(device, CL_DEVICE_OPENCL_C_FEATURES, param_size, features.data(), nullptr) != CL_SUCCESS) {
+        return false;
+    }
+    for (const cl_name_version & feature : features) {
+        if (strcmp(feature.name, name) == 0) {
+            return true;
+        }
+    }
+#else
+    GGML_UNUSED(device);
+    GGML_UNUSED(name);
+#endif
+    return false;
+}
+
 // check if device should be accepted
 static bool ggml_opencl_is_device_supported(ggml_backend_dev_t dev) {
     GGML_ASSERT(dev);
@@ -6858,7 +6882,8 @@ static bool ggml_opencl_is_device_supported(ggml_backend_dev_t dev) {
     // If OpenCL 3.0 is supported, then check for cl_khr_subgroups, which becomes
     // optional in OpenCL 3.0 (cl_khr_subgroup is mandatory in OpenCL 2.x)
     if (opencl_c_version.major == 3 && strstr(ext_buffer.data(), "cl_khr_subgroups") == NULL &&
-        strstr(ext_buffer.data(), "cl_intel_subgroups") == NULL) {
+        strstr(ext_buffer.data(), "cl_intel_subgroups") == NULL &&
+        !ggml_opencl_has_c_feature(dev_ctx->device, "__opencl_c_subgroups")) {
         GGML_LOG_WARN("ggml_opencl: device does not support subgroups (cl_khr_subgroups or cl_intel_subgroups) "
             "(note that subgroups is an optional feature in OpenCL 3.0)\n");
         return false;

@@ -100,7 +100,7 @@ kernel void kernel_mul_mm_q4_k_f32_l4_lm(
                 int is = 2 * n + b;
                 int qsi = n * 32 + (iqs % 16) * 2;
 
-                char * scales = src0_s + ib * 12;
+                global char * scales = (global char *)(src0_s + ib * 12);
 
                 int scidx0 = (is < 4) ? is : (is + 4);
                 int scidx1 = (is < 4) ? is : (is - 4);
